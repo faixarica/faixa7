@@ -1,0 +1,14 @@
+streamlit
+sqlite3
+passlib[bcrypt]
+pandas
+plotly
+requests
+pbkdf2_sha256
+random
+pyperclip 
+numpy tensorflow
+scikit-learn
+flask
+stripe
+python-dotenv

@@ -1,0 +1,7 @@
+# Ignorar arquivos e pastas sensíveis
+.env
+*.db
+*.csv
+__pycache__/
+*.pyc
+.nao vai pro git/

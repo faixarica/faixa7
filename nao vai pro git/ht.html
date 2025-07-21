@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Formulário de Login e Registro</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    /* Reset e Estilos Gerais */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: Arial, sans-serif;
+    }
+    
+    body {
+      background: #f0f0f0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    
+    /* Container Principal */
+    .container {
+      width: 100%;
+      max-width: 500px;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+    
+    /* Formulários */
+    .form-container {
+      padding: 30px;
+      transition: all 0.3s ease;
+    }
+    
+    h1 {
+      color: #066a75;
+      text-align: center;
+      margin-bottom: 20px;
+      font-size: 28px;
+    }
+    
+    /* Campos do Formulário */
+    .input-group {
+      margin-bottom: 20px;
+    }
+    
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: #405c60;
+      font-weight: bold;
+    }
+    
+    input[type="text"],
+    input[type="email"],
+    input[type="password"] {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 16px;
+    }
+    
+    /* Checkbox */
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      margin: 15px 0;
+    }
+    
+    .checkbox-group input {
+      margin-right: 10px;
+    }
+    
+    /* Botões */
+    button {
+      width: 100%;
+      padding: 12px;
+      background: #3d9db3;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    
+    button:hover {
+      background: #3498a8;
+    }
+    
+    /* Links de Alternância */
+    .toggle-link {
+      text-align: center;
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #eee;
+    }
+    
+    .toggle-link a {
+      color: #3d9db3;
+      text-decoration: none;
+      font-weight: bold;
+    }
+    
+    /* Esconde o formulário de cadastro inicialmente */
+    #cadastro {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Formulário de Login (visível por padrão) -->
+    <div id="login" class="form-container">
+      <h1>Login</h1>
+      <form>
+        <div class="input-group">
+          <label for="email_login">Seu e-mail</label>
+          <input type="email" id="email_login" placeholder="exemplo@email.com" required>
+        </div>
+        
+        <div class="input-group">
+          <label for="senha_login">Sua senha</label>
+          <input type="password" id="senha_login" placeholder="Digite sua senha" required>
+        </div>
+        
+        <div class="checkbox-group">
+          <input type="checkbox" id="manterlogado">
+          <label for="manterlogado">Manter-me logado</label>
+        </div>
+        
+        <button type="submit">Entrar</button>
+      </form>
+      
+      <div class="toggle-link">
+        Ainda não tem conta? <a href="#" onclick="mostrarCadastro()">Cadastre-se</a>
+      </div>
+    </div>
+    
+    <!-- Formulário de Cadastro (oculto inicialmente) -->
+    <div id="cadastro" class="form-container">
+      <h1>Cadastro</h1>
+      <form>
+        <div class="input-group">
+          <label for="nome_cad">Seu nome</label>
+          <input type="text" id="nome_cad" placeholder="Digite seu nome" required>
+        </div>
+        
+        <div class="input-group">
+          <label for="email_cad">Seu e-mail</label>
+          <input type="email" id="email_cad" placeholder="exemplo@email.com" required>
+        </div>
+        
+        <div class="input-group">
+          <label for="senha_cad">Crie uma senha</label>
+          <input type="password" id="senha_cad" placeholder="Digite sua senha" required>
+        </div>
+        
+        <button type="submit">Cadastrar</button>
+      </form>
+      
+      <div class="toggle-link">
+        Já tem conta? <a href="#" onclick="mostrarLogin()">Faça login</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function mostrarCadastro() {
+      document.getElementById('login').style.display = 'none';
+      document.getElementById('cadastro').style.display = 'block';
+    }
+    
+    function mostrarLogin() {
+      document.getElementById('cadastro').style.display = 'none';
+      document.getElementById('login').style.display = 'block';
+    }
+  </script>
+</body>
+</html>

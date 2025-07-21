@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>FaixaBet - Login</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Poppins', sans-serif;
+      background-color: #f1f1f1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+
+    .card {
+      background: #fff;
+      width: 360px;
+      padding: 40px 30px;
+      border-radius: 12px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+
+    .hidden { display: none; }
+
+    h2 {
+      font-size: 24px;
+      margin-bottom: 15px;
+      color: #222;
+    }
+
+    .logo {
+      font-size: 32px;
+      background: #333;
+      color: #fff;
+      border-radius: 8px;
+      width: 48px;
+      height: 48px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+    }
+
+    .input-field {
+      position: relative;
+      margin: 18px 0;
+      text-align: left;
+    }
+
+    .input-field input {
+      width: 100%;
+      padding: 12px 10px;
+      border: none;
+      border-bottom: 2px solid #ccc;
+      font-size: 14px;
+      background: transparent;
+      outline: none;
+    }
+
+    .input-field input:focus {
+      border-bottom-color: #7b2ff7;
+    }
+
+    .input-field label {
+      font-size: 13px;
+      color: #555;
+      display: block;
+      margin-bottom: 5px;
+    }
+
+    .login-btn {
+      margin-top: 30px;
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 25px;
+      background: linear-gradient(to right, #00c6ff, #7b2ff7);
+      color: white;
+      font-weight: bold;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .bottom-text {
+      margin-top: 20px;
+      font-size: 13px;
+      color: #555;
+    }
+
+    .bottom-text a {
+      color: #007bff;
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    .bottom-text a:hover {
+      text-decoration: underline;
+    }
+
+    .link {
+      display: block;
+      margin-top: 10px;
+      font-size: 13px;
+      color: #007bff;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- LOGIN CARD -->
+  <div class="card" id="login-card">
+    <h2>Bem-vinda à FaixaBet</h2>
+    <div class="logo">A</div>
+
+    <div class="input-field">
+      <label>Email</label>
+      <input type="email" placeholder="Digite seu e-mail">
+    </div>
+
+    <div class="input-field">
+      <label>Senha</label>
+      <input type="password" placeholder="Digite sua senha">
+    </div>
+
+    <a href="#" class="link">Esqueceu a senha?</a>
+
+    <button class="login-btn">LOGIN</button>
+
+    <div class="bottom-text">
+      Não tem uma conta? <a href="#" onclick="toggleCard()">Sign Up</a>
+    </div>
+  </div>
+
+  <!-- CADASTRO CARD -->
+  <div class="card hidden" id="signup-card">
+    <h2>Crie sua conta</h2>
+    <div class="logo">A</div>
+
+    <div class="input-field">
+      <label>Nome Completo</label>
+      <input type="text" placeholder="Seu nome completo">
+    </div>
+
+    <div class="input-field">
+      <label>Email</label>
+      <input type="email" placeholder="Seu e-mail">
+    </div>
+
+    <div class="input-field">
+      <label>Telefone</label>
+      <input type="tel" placeholder="(XX) XXXXX-XXXX">
+    </div>
+
+    <div class="input-field">
+      <label>Cidade - Estado</label>
+      <input type="text" placeholder="Ex: Joinville - SC">
+    </div>
+
+    <div class="input-field">
+      <label>Senha</label>
+      <input type="password" placeholder="Crie uma senha">
+    </div>
+
+    <div class="input-field">
+      <label>Confirme a Senha</label>
+      <input type="password" placeholder="Confirme a senha">
+    </div>
+
+    <button class="login-btn">CADASTRAR</button>
+
+    <div class="bottom-text">
+      <a href="#" onclick="toggleCard()">← Voltar ao Login</a>
+    </div>
+  </div>
+
+  <script>
+    function toggleCard() {
+      const login = document.getElementById('login-card');
+      const signup = document.getElementById('signup-card');
+      login.classList.toggle('hidden');
+      signup.classList.toggle('hidden');
+    }
+  </script>
+
+</body>
+</html>
