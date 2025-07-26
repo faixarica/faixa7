@@ -244,7 +244,7 @@ def registrar_login(id_usuario):
 if not st.session_state.get("logged_in", False):
     st.markdown("## Acesso ao Sistema")
 
-    aba = st.radio("", ["Login", "Cadastro"], horizontal=True)
+    aba = st.radio("", ["Login", "Cadastro"], horizontal=True, label_visibility="collapsed")
     st.write("")
 
     if aba == "Login":
@@ -460,6 +460,75 @@ def admin_dashboard():
         st.session_state.admin = False
         st.success("Sessão encerrada.")
         st.rerun()
+    st.markdown("---")
+    st.markdown("📊 **Consulta de Palpites por Data**")
+
+    st.markdown("<h5>Escolha a Data do Concurso</h5>", unsafe_allow_html=True)
+    data_selecionada = st.date_input("", format="DD/MM/YYYY")
+
+    st.markdown("---")
+    st.markdown("📊 **Verificar Palpites com Resultados Oficiais**")
+
+    st.markdown("<h5>Escolha a Data do Concurso</h5>", unsafe_allow_html=True)
+    data_escolhida = st.date_input("📅 Data para verificação de palpites", format="DD/MM/YYYY")
+
+    if st.button("🔍 Verificar Palpites e Contar Acertos"):
+        try:
+            # Formatar data
+            data_str = data_escolhida.strftime("%d/%m/%Y")
+            data_obj = datetime.strptime(data_str, "%d/%m/%Y")
+            data_inicio = data_obj.strftime("%Y-%m-%d 00:00:00")
+            data_fim = data_obj.strftime("%Y-%m-%d 23:59:59")
+
+            # Conectar e buscar resultado oficial
+            conn = sqlite3.connect("database.db")
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                SELECT numeros, concurso FROM resultados_oficiais
+                WHERE data BETWEEN ? AND ?
+                ORDER BY data DESC LIMIT 1
+            """, (data_inicio, data_fim))
+            resultado = cursor.fetchone()
+
+            if resultado:
+                numeros_str, concurso = resultado
+                numeros_oficiais = list(map(int, numeros_str.split(",")))
+                st.success(f"✅ Resultado oficial encontrado para o concurso {concurso}")
+                st.markdown(f"<p style='font-size:20px;'>🧮 Números sorteados: <strong>{numeros_str}</strong></p>", unsafe_allow_html=True)
+
+                # Buscar palpites da data
+                df = pd.read_sql_query("SELECT * FROM palpites WHERE data BETWEEN ? AND ?", conn, params=(data_inicio, data_fim))
+
+                if df.empty:
+                    st.warning("⚠️ Nenhum palpite encontrado para essa data.")
+                else:
+                    def contar_acertos(palpites_df, numeros_oficiais):
+                        acertos = {11: 0, 12: 0, 13: 0, 14: 0, 15: 0}
+                        for _, row in palpites_df.iterrows():
+                            numeros = list(map(int, row['numeros'].split(',')))
+                            qtd_acertos = len(set(numeros) & set(numeros_oficiais))
+                            if qtd_acertos in acertos:
+                                acertos[qtd_acertos] += 1
+                        return acertos
+
+                    resumo = contar_acertos(df, numeros_oficiais)
+                    st.info("🎯 **Resumo de Acertos**")
+                    for pontos in sorted(resumo.keys(), reverse=True):
+                        st.write(f"💥 {pontos} pontos: {resumo[pontos]} palpites")
+
+                    st.markdown("📝 Palpites do dia:")
+                    st.dataframe(df)
+
+            else:
+                st.warning("⚠️ Nenhum resultado oficial encontrado para esta data.")
+
+            conn.close()
+
+        except Exception as e:
+            st.error(f"❌ Erro ao verificar palpites: {e}")
+
+
 
 def popular_escassez():
     import sqlite3

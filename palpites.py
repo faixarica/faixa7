@@ -3,37 +3,40 @@ import random
 from datetime import datetime
 from database import get_db
 import pyperclip 
-
-import numpy as np
+import os
 import sqlite3
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense, Dropout
-from sklearn.model_selection import train_test_split
+import numpy as np
 
-# Função para verificar o limite de palpites
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
+    # Função para verificar o limite de palpites
 def verificar_limite_palpites(id_usuario):
     conn = get_db()
     cursor = conn.cursor()
-    
+
+    # Obtém dados do plano atual do usuário
     cursor.execute("""
-        SELECT p.palpites_dia, p.limite_palpites_mes, cp.palpites_dia_usado, cp.data_expira_plan, p.nome
+        SELECT p.palpites_dia, p.limite_palpites_mes, p.nome
         FROM usuarios u
         JOIN planos p ON u.id_plano = p.id
-        JOIN client_plans cp ON u.id = cp.id_client
-        WHERE u.id = ? AND cp.data_expira_plan > date('now')
-        ORDER BY cp.data_inclusao DESC
-        LIMIT 1
+        WHERE u.id = ?
     """, (id_usuario,))
-    
     resultado = cursor.fetchone()
+
     if not resultado:
         conn.close()
-        return False, "Plano não encontrado ou expirado", 0
-    
-    palpites_dia, limite_mes, usados_dia, data_expira, nome_plano = resultado
+        return False, "Plano não encontrado", 0
 
-    # Checar uso mensal no banco de palpites
+    palpites_dia, limite_mes, nome_plano = resultado
+
+    # Conta quantos palpites foram feitos hoje
+    cursor.execute("""
+        SELECT COUNT(*) FROM palpites
+        WHERE id_usuario = ? AND DATE(data) = DATE('now')
+    """, (id_usuario,))
+    usados_dia = cursor.fetchone()[0]
+
+    # Conta quantos palpites foram feitos no mês atual
     cursor.execute("""
         SELECT COUNT(*) FROM palpites
         WHERE id_usuario = ? AND strftime('%Y-%m', data) = strftime('%Y-%m', 'now')
@@ -43,7 +46,7 @@ def verificar_limite_palpites(id_usuario):
     conn.close()
 
     if usados_dia >= palpites_dia:
-        return False, nome_plano, 0  # ainda retornamos o nome do plano para consistência
+        return False, nome_plano, 0
 
     if usados_mes >= limite_mes:
         return False, nome_plano, 0
@@ -52,7 +55,7 @@ def verificar_limite_palpites(id_usuario):
     return True, nome_plano, palpites_restantes_mes
 
 def obter_limite_dezenas_por_plano(tipo_plano):
-    conn = sqlite3.connect("database.db")
+    conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT limite_dezenas FROM planos WHERE nome = ?", (tipo_plano,))
     resultado = cursor.fetchone()
@@ -73,6 +76,12 @@ def atualizar_contador_palpites(id_usuario):
         LIMIT 1
     """, (id_usuario,))
     plan_id = cursor.fetchone()[0]
+    resultado = cursor.fetchone()
+    if resultado is None:
+        conn.close()
+        raise ValueError(f"Nenhum plano encontrado para o usuário {id_usuario}")
+    plan_id = resultado[0]
+
     
     # Atualiza o contador de palpites
     cursor.execute("""
@@ -116,9 +125,6 @@ def gerar_palpite_estatistico(limite=15):
     )
     return sorted(palpite)[:limite]
 
-
-    return sorted(palpite)
-
 # Função para gerar palpite aleatório
 def gerar_palpite_aleatorio(limite=15):
     return sorted(random.sample(range(1, 26), limite))
@@ -136,58 +142,111 @@ def gerar_palpite_pares_impares(limite=15):
     pares_impares_ajustado = sorted(pares + impares)
     return pares_impares_ajustado
 
-# lógica com LSTM truncada para o limite
-def gerar_palpite_lstm(limite=15):
-    conn = sqlite3.connect('database.db')
-    cursor = conn.cursor()
+# Funções carregar modelos LSTM
+# 2. ADICIONAR estas funções (substituindo as originais):
+@st.cache_resource
+def carregar_modelo_14():
+    # Importacao movida para dentro da funcao
+    from tensorflow.keras.models import load_model
+    try:
+        model = load_model("modelo_lstm_14.h5")
+        return model
+    except Exception as e:
+         st.error(f"Erro ao carregar modelo LSTM 14: {e}. Certifique-se de que o arquivo 'modelo_lstm_14.h5' existe.")
+         return None
 
-    # Busca resultados
+@st.cache_resource
+def carregar_modelo_lstm():
+     # Importacao movida para dentro da funcao
+     from tensorflow.keras.models import load_model
+     try:
+         model = load_model("modelo_lstm.h5")
+         return model
+     except Exception as e:
+         st.error(f"Erro ao carregar modelo LSTM: {e}. Certifique-se de que o arquivo 'modelo_lstm.h5' existe.")
+         return None
+
+# 3. SUBSTITUIR a funcao gerar_palpite_lstm ORIGINAL por esta:
+def gerar_palpite_lstm(limite=15):
+    # ... (conexao e busca de dados - mantem igual) ...
+    conn = get_db()
+    cursor = conn.cursor()
     cursor.execute("""
         SELECT n1,n2,n3,n4,n5,n6,n7,n8,n9,n10,n11,n12,n13,n14,n15 
         FROM resultados_oficiais
     """)
     resultados = cursor.fetchall()
     conn.close()
+    
+    if len(resultados) < 5: # Pode manter 5 se so precisa dos ultimos
+        raise ValueError("Histórico insuficiente para previsão com LSTM.")
 
-    if len(resultados) < 20:
-        raise ValueError("Histórico insuficiente para treinar a LSTM.")
+    # Importacoes movidas
+    import numpy as np # Mantem numpy
 
-    # Prepara dados em binário
+    def to_binario(jogo):
+        binario = [0] * 25
+        for n in jogo:
+            binario[n - 1] = 1
+        return binario
+    
+    # Prepara dados (apenas para entrada, NAO para treinar)
+    binarios = [to_binario(r) for r in resultados]
+    # Usa os ultimos 5 resultados como entrada para predicao
+    entrada = np.array([binarios[-5:]])
+
+    # Carrega o modelo usando a funcao cacheada
+    modelo = carregar_modelo_lstm()
+    if modelo is None:
+       raise ValueError("Não foi possível carregar o modelo LSTM.")
+
+    # Predicao (sem treinamento)
+    pred = modelo.predict(entrada, verbose=0)[0]
+    pred = np.clip(pred, 1e-8, 1)
+    pred /= pred.sum()
+    numeros = sorted(np.random.choice(range(1, 26), size=limite, replace=False, p=pred))
+    return ",".join(map(str, numeros)) # Ou return numeros se quiser lista
+
+# 4. SUBSTITUIR a funcao gerar_palpite_lstm_14 ORIGINAL por esta:
+def gerar_palpite_lstm_14(limite=15):
+    # ... (conexao e busca de dados - mantem igual) ...
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT n1,n2,n3,n4,n5,n6,n7,n8,n9,n10,n11,n12,n13,n14,n15 
+        FROM resultados_oficiais
+        ORDER BY concurso DESC
+        LIMIT 5
+    """)
+    ultimos = cursor.fetchall()
+    conn.close()
+
+    if len(ultimos) < 5:
+        raise ValueError("Histórico insuficiente para previsão com LSTM 14.")
+
+    # Importacao movida
+    import numpy as np
+
     def to_binario(jogo):
         binario = [0] * 25
         for n in jogo:
             binario[n - 1] = 1
         return binario
 
-    binarios = [to_binario(r) for r in resultados]
-    X, y = [], []
-    for i in range(len(binarios) - 5):
-        X.append(binarios[i:i+5])
-        y.append(binarios[i+5])
-    X, y = np.array(X), np.array(y)
-    X_train, _, y_train, _ = train_test_split(X, y, test_size=0.2, random_state=42)
+    entrada = np.array([[to_binario(j) for j in reversed(ultimos)]])
 
-    # Modelo LSTM simples
-    model = Sequential([
-        LSTM(64, return_sequences=False, input_shape=(5, 25)),
-        Dropout(0.2),
-        Dense(32, activation='relu'),
-        Dense(25, activation='sigmoid')
-    ])
-    model.compile(optimizer='adam', loss='binary_crossentropy')
-    model.fit(X_train, y_train, epochs=10, batch_size=16, verbose=0)
+    # Carrega o modelo usando a funcao cacheada
+    modelo = carregar_modelo_14()
+    if modelo is None:
+       raise ValueError("Não foi possível carregar o modelo LSTM 14.")
 
-    # Predição
-    entrada = np.array([binarios[-5:]])
-    pred = model.predict(entrada, verbose=0)[0]
+    pred = modelo.predict(entrada, verbose=0)[0]
     pred = np.clip(pred, 1e-8, 1)
     pred /= pred.sum()
-
-    # Gera números usando a distribuição predita, respeitando o limite dinâmico
     numeros = sorted(np.random.choice(range(1, 26), size=limite, replace=False, p=pred))
+    return ",".join(map(str, numeros)) # Ou return numeros
 
-    # Retorna como string para gravar no banco
-    return ",".join(map(str, numeros))
+# --- FIM DAS CORREÇÕES NO palpites.py ---
 
 # Função principal para gerar palpites
 def gerar_palpite():
@@ -198,7 +257,6 @@ def gerar_palpite():
 
     # 1. Verifica se ainda pode gerar palpites este mês
     permitido, nome_plano, palpites_restantes = verificar_limite_palpites(id_usuario)
- #   st.write(f"[DEBUG] Plano detectado: '{nome_plano}'")
     if not permitido:
         st.error(f"Você atingiu o Limite de Palpites do Plano {nome_plano} para este mês.")
         return
@@ -210,8 +268,12 @@ def gerar_palpite():
     modelos_disponiveis = ["Aleatório", "Estatístico", "Pares/Ímpares"]
     if nome_plano in ["Silver", "Gold"]:
         modelos_disponiveis.append("LSTM")
+        modelos_disponiveis.append("LSTM (14 acertos)")
 
     modelo = st.selectbox("Modelo de Geração:", modelos_disponiveis)
+    if not modelo:
+      st.warning("Por favor, selecione um modelo de geração.")
+      return
 
     # 4. Permite ao usuário escolher quantos palpites gerar
     num_palpites = st.number_input(
@@ -234,6 +296,8 @@ def gerar_palpite():
                     palpite = gerar_palpite_pares_impares(limite=limite_dezenas)
                 elif modelo == "LSTM":
                     palpite = gerar_palpite_lstm(limite=limite_dezenas)
+                elif modelo == "LSTM (14 acertos)":
+                    palpite = gerar_palpite_lstm_14(limite=limite_dezenas)
                 else:
                     st.error("Modelo inválido.")
                     return
@@ -245,29 +309,27 @@ def gerar_palpite():
             st.success(f"{num_palpites} Palpite(s) Gerado(s) com Sucesso:")
 
             for i, p in enumerate(palpites_gerados, 1):
-                    texto = f"Palpite {i}: {p}"
-            st.markdown(
-                f"""
-                    <div style="padding: 10px; background-color: #f4f4f4; border-radius: 8px; margin-bottom: 10px;">
-                         <span style="font-family: 'Poppins', sans-serif; font-size: 16px; font-weight: bold;">
-                            {texto}
-                         </span>
-                        <button onclick="navigator.clipboard.writeText('{texto}')" 
-                                 style="float:right; background:none; border:none; cursor:pointer;" 
-                                title="Copiar">
-                           📋
-                        </button>
-                    </div>
-                """,
-            unsafe_allow_html=True
-            )
+                texto = f"Palpite {i}: {p}"
+                st.markdown(
+                    f"""
+                        <div style="padding: 10px; background-color: #f4f4f4; border-radius: 8px; margin-bottom: 10px;">
+                             <span style="font-family: 'Poppins', sans-serif; font-size: 16px; font-weight: bold;">
+                                {texto}
+                             </span>
+                            <button onclick="navigator.clipboard.writeText('{texto}')" 
+                                     style="float:right; background:none; border:none; cursor:pointer;" 
+                                    title="Copiar">
+                               📋
+                            </button>
+                        </div>
+                    """,
+                    unsafe_allow_html=True
+                )
 
-
-            # ℹ️ Informação de compatibilidade
             with st.expander("ℹ️ Aviso Sobre Cópia"):
                 st.markdown(
                     "Em Alguns navegadores de celular ou Safari, o Botão de Cópia pode não Funcionar Corretamente. "
-                    "Use o seu Botãoou como as teclas de costume para Copy"
+                    "Use o seu Botão ou como as teclas de costume para Copy"
                 )
 
         except Exception as e:
@@ -305,10 +367,10 @@ def historico_palpites():
 
     st.markdown("### 📜 Histórico de Palpites")
 
-    opcoes_modelo = ["Todos", "Aleatório", "Estatístico", "Ímpares-Pares", "LSTM"]
+    opcoes_modelo = ["Todos", "Aleatório", "Estatístico", "Ímpares-Pares", "LSTM", "LSTM (14 acertos)"]
     filtro_modelo = st.selectbox("Filtrar por modelo:", opcoes_modelo)
 
-    conn = sqlite3.connect("database.db")
+    conn = get_db()
     cursor = conn.cursor()
 
     query = "SELECT numeros, modelo, data, status FROM palpites WHERE id_usuario = ?"
@@ -398,7 +460,9 @@ def validar_palpite():
                 status_texto = "✅ Validado" if status == "S" else "⏳ Não validado"
                 cor_status = "#28a745" if status == "S" else "#666"
                 bg = "#e9f7ef" if status == "S" else "#f8f8f8"
-
+                
+                # 👉 Aqui está a linha que você quer adicionar:
+                cor_modelo = "#663399" if modelo == "LSTM (14 acertos)" else "#1f77b4"
                 with cols[j]:
                     st.markdown(f"""
                         <div style='background:{bg}; padding:10px; border-radius:8px; border:1px solid #ccc; margin-bottom:10px'>
@@ -406,6 +470,5 @@ def validar_palpite():
                             <div style='font-size:12px; color:#888;'>{modelo} | {data}</div>
                             <div style='font-family: monospace; font-size:14px; margin-top:4px;'>{numeros}</div>
                         </div>
-                    """, unsafe_allow_html=True)
-                    
-                    
+                    """, unsafe_allow_html=True)                
+                  
