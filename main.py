@@ -190,21 +190,35 @@ def criar_usuario(nome, email, telefone, data_nascimento, usuario, senha, tipo, 
 
     finally:
         conn.close()
+
 def calcular_palpites_periodo(id_usuario):
     conn = sqlite3.connect('database.db')
     cursor = conn.cursor()
 
-    cursor.execute("SELECT COUNT(*) FROM palpites WHERE id_usuario = ? AND DATE(substr(data, 1, 10)) = DATE('now')", (id_usuario,))
+    # Palpites do dia
+    cursor.execute("""
+        SELECT COUNT(*) FROM palpites 
+        WHERE id_usuario = ? AND DATE(data) = DATE('now')
+    """, (id_usuario,))
     dia = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(*) FROM palpites WHERE id_usuario = ? AND strftime('%W', data) = strftime('%W', 'now')", (id_usuario,))
+    # Palpites da semana
+    cursor.execute("""
+        SELECT COUNT(*) FROM palpites 
+        WHERE id_usuario = ? AND strftime('%Y-%W', data) = strftime('%Y-%W', 'now')
+    """, (id_usuario,))
     semana = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(*) FROM palpites WHERE id_usuario = ? AND strftime('%m', data) = strftime('%m', 'now')", (id_usuario,))
+    # Palpites do mês
+    cursor.execute("""
+        SELECT COUNT(*) FROM palpites 
+        WHERE id_usuario = ? AND strftime('%Y-%m', data) = strftime('%Y-%m', 'now')
+    """, (id_usuario,))
     mes = cursor.fetchone()[0]
 
     conn.close()
     return dia, semana, mes
+
 
 def registrar_login(id_usuario):    
     try:
@@ -239,7 +253,6 @@ def registrar_login(id_usuario):
     conn.commit()
     conn.close()
 
-
 # LOGIN / CADASTRO
 if not st.session_state.get("logged_in", False):
     st.markdown("## Acesso ao Sistema")
@@ -254,8 +267,8 @@ if not st.session_state.get("logged_in", False):
         if st.button("Entrar"):
             conn = sqlite3.connect("database.db")
             cursor = conn.cursor()
-           
 
+            # Verificação de login administrativo (mantém como estava)
             if usuario_input == "ufaixa990" and senha_input == "ufaixa990!":
                 st.session_state.logged_in = True
                 st.session_state.usuario = {
@@ -267,28 +280,68 @@ if not st.session_state.get("logged_in", False):
                 }
                 st.session_state.admin = True
                 st.success("Login administrativo realizado!")
-                
                 st.rerun()
 
+            # Busca o usuário para login normal
             cursor.execute("""
                 SELECT id, tipo, usuario, email, senha, ativo 
                 FROM usuarios 
                 WHERE usuario = ?
             """, (usuario_input,))
             user = cursor.fetchone()
-            conn.close()
+            # Não fecha a conexão ainda, pois precisamos fazer mais consultas
 
             if user:
                 id, tipo, usuario, email, senha_hash, ativo = user
+                
+                # --- CORREÇÃO CRÍTICA: Determinar o plano ativo ---
+                # 1. Busca o id_plano ARMAZENADO na tabela usuarios (pode estar desatualizado)
+                cursor.execute("SELECT id_plano FROM usuarios WHERE id = ?", (id,))
+                id_plano_armazenado_result = cursor.fetchone()
+                id_plano_armazenado = id_plano_armazenado_result[0] if id_plano_armazenado_result else 1
+                
+                # 2. Busca o plano ATIVO mais recente na tabela client_plans
+                cursor.execute("""
+                    SELECT cp.id_plano
+                    FROM client_plans cp
+                    WHERE cp.id_client = ? AND cp.ativo = 1
+                    ORDER BY cp.data_inclusao DESC
+                    LIMIT 1
+                """, (id,))
+                
+                plano_ativo_result = cursor.fetchone()
+                
+                # 3. Determina o ID do plano a ser usado na sessão
+                id_plano_atual = id_plano_armazenado # Valor padrão
+                if plano_ativo_result:
+                    id_plano_atual = plano_ativo_result[0] # Sobrescreve com o plano ativo encontrado
+                
+                # 4. (Opcional mas recomendado) Corrige o id_plano na tabela usuarios se estiver desatualizado
+                if id_plano_armazenado != id_plano_atual:
+                    try:
+                        cursor.execute("UPDATE usuarios SET id_plano = ? WHERE id = ?", (id_plano_atual, id))
+                        # conn.commit() # Não é estritamente necessário se não fizer rollback, mas é uma boa prática
+                        # Para manter a estrutura original, vamos fazer commit e close juntos no final
+                    except sqlite3.Error as e:
+                        print(f"Log: Erro ao corrigir id_plano do usuário {id}: {e}") # Use logging em produção
+                        # conn.rollback() # Não podemos fazer rollback pq não fizemos commit ainda, mas é bom ter em mente
+                        
+                # Agora podemos fechar a conexão após todas as operações
+                conn.close()
+                # --- FIM DA CORREÇÃO CRÍTICA ---
+                
+                # Verifica a senha e procede com o login normal
                 if pbkdf2_sha256.verify(senha_input, senha_hash):
                     if ativo:
                         st.session_state.logged_in = True
                         st.session_state.usuario = {
                             "id": id,
-                            "nome": usuario,
+                            "nome": usuario, # Mantém como estava, mas considere usar nome_completo
                             "email": email,
                             "tipo": tipo,
-                            "id_plano": 1
+                            # ------------------------------------------------------------
+                            "id_plano": id_plano_atual # <<<==== CORRIGIDO ===>>>
+                            # ------------------------------------------------------------
                         }
                         if tipo == "admin":
                             st.session_state.admin = True
@@ -296,10 +349,14 @@ if not st.session_state.get("logged_in", False):
                         st.success("Login realizado com sucesso!")
                         st.rerun()
                     else:
+                        # A conexão já foi fechada acima, então não precisa fechar novamente aqui neste caminho
                         st.error("Conta inativa.")
                 else:
+                    # A conexão já foi fechada acima, então não precisa fechar novamente aqui neste caminho
                     st.error("Senha incorreta.")
             else:
+                # Fecha a conexão se o usuário não for encontrado
+                conn.close()
                 st.error("Usuário não encontrado.")
 
         st.markdown('<a class="recover" href="#">Esqueceu a senha?</a>', unsafe_allow_html=True)
@@ -323,6 +380,7 @@ if not st.session_state.get("logged_in", False):
                 cursor.execute("SELECT * FROM usuarios WHERE usuario = ? OR email = ?", (usuario, email))
                 if cursor.fetchone():
                     st.error("Usuário ou email já cadastrado!")
+                    conn.close() # Fecha a conexão se o cadastro falhar
                 else:
                     senha_hash = pbkdf2_sha256.hash(senha)
                     cursor.execute('''
@@ -342,15 +400,14 @@ if not st.session_state.get("logged_in", False):
                     ''', (id_cliente, hoje.strftime('%Y-%m-%d'), expiracao.strftime('%Y-%m-%d')))
 
                     conn.commit()
+                    conn.close() # Fecha a conexão após o sucesso
                     st.success("Cadastro realizado com sucesso! Faça login para continuar.")
-                conn.close()
-
+                
         st.markdown('<a class="recover" href="#">← Voltar ao Login</a>', unsafe_allow_html=True)
-
 
     st.stop()
 
-
+# --- FIM DO BLOCO DE LOGIN / CADASTRO ---
 def admin_dashboard():
     st.markdown("<h2 style='color: green;'>Painel Administrativo - FaixaBet</h2>", unsafe_allow_html=True)
 
@@ -527,7 +584,6 @@ def admin_dashboard():
 
         except Exception as e:
             st.error(f"❌ Erro ao verificar palpites: {e}")
-
 
 
 def popular_escassez():

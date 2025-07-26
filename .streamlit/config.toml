@@ -2,13 +2,4 @@
 headless = true
 port = 8501
 enableCORS = false
-
-[theme]
-primaryColor = "#00b386"
-backgroundColor = "#ffffff"
-secondaryBackgroundColor = "#f0f2f6"
-textColor = "#262730"
-font = "sans serif"
-
-[runtime]
-python_version = "3.10"
+enableXsrfProtection = false

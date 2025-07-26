@@ -207,7 +207,7 @@ def calcular_distribuicao_pares_impares():
 # Função principal do Dashboard
 def mostrar_dashboard():
     apply_custom_css()
-    st.title(" Seu Painel Estatístico")
+    st.title("Painel Estatístico")
 
     conn = sqlite3.connect("database.db")
     cursor = conn.cursor()
@@ -258,7 +258,7 @@ def mostrar_dashboard():
         plano_id = st.session_state.usuario.get("id_plano", 1)
 
     abas = st.tabs([
-        "🎯 Frequência", "🔢 Pares/Impares", "🧮 Soma", "🔥 Mapa de Calor", "📋 Comparativos"
+        "Frequência", "Pares/Impares", " Soma", "Mapa de Calor", "Comparativos"
     ])
 
     with abas[0]:
